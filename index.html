@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Simulador de Orçamento Avançado v4</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:Arial,sans-serif;background:#f5f7fa;color:#333;transition:background .3s,color .3s; line-height: 1.6;}
+    body.dark-mode{background:#181a1f;color:#ddd;}
+    button,input,select{font-family:inherit;font-size:1rem;}
+    .container{max-width:900px;margin:20px auto;background:#fff;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.05);padding:20px;transition:background .3s, box-shadow .3s;position:relative; overflow-x: hidden;}
+    body.dark-mode .container{background:#24262e; box-shadow:0 4px 20px rgba(0,0,0,.15);}
+    
+    .pdf-export-mode { 
+        background-color: #ffffff !important; 
+    }
+    .pdf-export-mode *, .pdf-export-mode *::before, .pdf-export-mode *::after { 
+        transition: none !important; 
+        animation: none !important; 
+    }
+    .pdf-export-mode .title-bar,
+    .pdf-export-mode [data-pdf-page-content="1-noexport"],
+    .pdf-export-mode .remove-btn,
+    .pdf-export-mode .add-button {
+        display: none !important;
+    }
+
+    .export-header{display:none; font-size:1.2rem;font-weight:bold;text-align:center;margin:0 0 15px 0;padding:10px 0; border-bottom: 1px solid #eee;}
+    body.dark-mode .export-header{border-bottom-color: #333;}
+    .title-bar{ background:linear-gradient(135deg,#4e54c8,#8f94fb); padding:18px 15px;border-radius:12px 12px 0 0;margin:-20px -20px 20px -20px;color:#fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; position: relative;}
+    .title-bar h1{font-size:1.9rem; margin:0;}
+    .dark-mode-toggle{position:absolute;top:50%;right:15px;transform: translateY(-50%);background:rgba(255,255,255,0.1); border:none;color:inherit;font-size:1.5rem;cursor:pointer; border-radius: 50%; width:40px; height:40px; line-height: 40px; padding:0; display:flex; align-items: center; justify-content: center;}
+    body.dark-mode .dark-mode-toggle{background:rgba(0,0,0,0.2);}
+    .controls{ display:flex;flex-wrap:wrap;gap:10px; justify-content:center;margin-bottom:25px; align-items: center;}
+    .controls label{display:flex;align-items:center;gap:6px;font-size:.95rem;}
+    .controls select,.controls input[type="month"],.controls input[type="date"],.controls button{ padding:10px 14px;border:1px solid #ccc;border-radius:8px;font-size:.95rem; transition:background .2s,border-color .2s; min-height: 40px;}
+    body.dark-mode .controls select, body.dark-mode .controls input[type="month"], body.dark-mode .controls input[type="date"] { background-color: #2c2f36; border-color: #444; color: #ddd; }
+    .controls button{background:#4e54c8;color:#fff;border:none;cursor:pointer;} .controls button:hover{background:#3b3f9c;}
+    #resetBtn {background: #e74c3c;} #resetBtn:hover {background: #c0392b;}
+    .budget-type input[type="radio"]{cursor:pointer; margin-right: 4px;}
+    .section{ margin-bottom:25px; padding-bottom: 15px; border-bottom: 1px dashed #e0e0e0;}
+    body.dark-mode .section{border-bottom-color: #3a3d47;} .section:last-of-type { border-bottom: none; }
+    .section h3, .chart-title { margin-bottom:15px;font-size:1.3rem;color:#4e54c8; padding-bottom: 5px; border-bottom: 1px solid #efefff; text-align:left; }
+    .chart-title { text-align: center;}
+    body.dark-mode .section h3, body.dark-mode .chart-title {color:#8f94fb; border-bottom-color: #2c2f36;}
+    .data-row{ display:grid;grid-template-columns:1fr 1fr auto; gap:10px;align-items:center;margin-bottom:12px;}
+    .data-row.has-outros { grid-template-columns: 1fr 1fr 1fr auto; }
+    .data-row input[type=number],.data-row select, .data-row .outros-input{padding:10px;border:1px solid #ddd; border-radius:6px;font-size:.95rem;transition:border-color .2s; width:100%;}
+    body.dark-mode .data-row input[type=number], body.dark-mode .data-row select, body.dark-mode .data-row .outros-input { background-color: #2c2f36; border-color: #444; color: #ddd; }
+    .data-row input:focus,.data-row select:focus, .data-row .outros-input:focus{border-color:#4e54c8; box-shadow: 0 0 0 2px rgba(78, 84, 200, 0.2);}
+    .remove-btn{background:none;border:none;font-size:1.2rem; color:#e74c3c;cursor:pointer;padding:6px;transition:color .2s; line-height: 1;}
+    .remove-btn:hover{color:#c0392b;}
+    .add-button{width:100%;padding:12px 0;background:#5cb85c;color:#fff; border:none;border-radius:8px;font-size:1rem;cursor:pointer; transition:background .2s;margin-top:10px;}
+    .add-button:hover{background:#4cae4c;}
+    .summary-grid{ display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:18px;margin-bottom:25px;}
+    .summary-item{background:#f9f9ff;border-radius:10px;padding:18px; text-align:center;font-weight:600;transition:background .3s, transform 0.2s, box-shadow 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.05);}
+    .summary-item:hover {transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.07);}
+    body.dark-mode .summary-item{background:#3a3d47; box-shadow: 0 2px 4px rgba(0,0,0,0.15);}
+    body.dark-mode .summary-item:hover {box-shadow: 0 4px 8px rgba(0,0,0,0.2);}
+    .summary-item div{margin-top:10px;font-size:1.5rem;color:#fff; padding: 8px 10px; border-radius: 6px; font-weight: bold;}
+    body.dark-mode .summary-item div{color:#fff!important;}
+    #totalIncome div{background:#28a745;} #totalExpenses div{background:#dc3545;}
+    #saldo.positive div{background:#28a745;} #saldo.negative div{background:#e74c3c;}
+    #fundoEmergencia div{background:#ffc107; color: #333 !important;} body.dark-mode #fundoEmergencia div {color: #333 !important;}
+    #incomeExpenseChartContainer, #graficoContainer { margin-bottom: 25px; padding: 20px; background-color: #fdfdff; border-radius: 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.06); }
+    body.dark-mode #incomeExpenseChartContainer, body.dark-mode #graficoContainer { background-color: #2a2d35; box-shadow: 0 3px 6px rgba(0,0,0,0.2); }
+    #incomeExpenseChart, #grafico {width:100%;max-height:320px;}
+    #legenda{ display:flex;flex-wrap:wrap;gap:10px 15px;margin-top:15px; justify-content: center; padding: 10px 0;}
+    #legenda>div{display:flex;align-items:center;gap:8px;min-width:130px; font-size: 0.9rem;}
+    #legenda>div>div{width:14px;height:14px;border-radius:4px;}
+    #legenda>div>span{font-weight:bold; white-space:nowrap;}
+    body.dark-mode #legenda>div>span { color: #bbb;}
+    #budgetAnalysisSection { margin-top: 30px; }
+    .analysis-content { background-color: #f9f9f9; border-radius: 8px; padding: 20px 25px; margin-top: 10px; line-height: 1.7; border: 1px solid #e0e0e0; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    body.dark-mode .analysis-content { background-color: #2c2f36; border-color: #3a3d47; color: #cdd5de; box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
+    .analysis-content h4 { margin-top: 18px; margin-bottom: 10px; font-size: 1.1rem; color: #4e54c8; padding-bottom: 3px; border-bottom: 1px dotted #bdc3c7; }
+    .analysis-content h4:first-child { margin-top: 0; }
+    body.dark-mode .analysis-content h4 { color: #8f94fb; border-bottom-color: #4a4e57; }
+    .analysis-content ul { list-style-position: outside; margin-left: 0; padding-left: 20px; }
+    .analysis-content li { margin-bottom: 10px; }
+    .analysis-advice-positive { color: #27ae60; font-weight: bold; } body.dark-mode .analysis-advice-positive { color: #2ecc71; }
+    .analysis-advice-negative { color: #c0392b; font-weight: bold; } body.dark-mode .analysis-advice-negative { color: #e74c3c; }
+    .analysis-advice-neutral { color: #7f8c8d; } body.dark-mode .analysis-advice-neutral { color: #95a5a6; }
+    .animate-add { animation: fadeInSlideDown 0.4s ease-out forwards; } @keyframes fadeInSlideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-remove { animation: fadeOutSlideUp 0.4s ease-in forwards; } @keyframes fadeOutSlideUp { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-20px); } }
+    .summary-item div.animate-update { animation: briefHighlight 0.6s ease-out; } @keyframes briefHighlight { 0% { transform: scale(1); filter: brightness(100%); } 50% { transform: scale(1.08); filter: brightness(120%); } 100% { transform: scale(1); filter: brightness(100%); } }
+    
+    @media(max-width:600px){ .container {padding: 15px; margin: 10px auto;} .title-bar {padding: 15px; margin:-15px -15px 15px -15px;} .title-bar h1 {font-size: 1.6rem;} .dark-mode-toggle {width: 36px; height: 36px; font-size: 1.3rem; line-height: 36px;} .controls { flex-direction:column; align-items: stretch; gap: 10px; } .controls button, .controls select, .controls input[type="month"], .controls input[type="date"] { width: 100%; font-size: 1rem; padding: 12px; } .controls label { justify-content: flex-start; padding: 8px 0; font-size: 1rem; } .section h3, .chart-title { font-size: 1.2rem; } .data-row, .data-row.has-outros { grid-template-columns:1fr; gap: 10px; } .data-row input[type=number], .data-row select, .data-row .outros-input { font-size: 1rem; padding: 12px; } .remove-btn { width: 100%; padding: 10px; background-color: #ffebee; border: 1px solid #ef9a9a; border-radius: 6px; margin-top: 5px; font-size: 1rem; color: #c62828; } body.dark-mode .remove-btn { background-color: #4a2e2e; border-color: #7c4c4c; color: #ff8a80; } .summary-item {padding: 15px;} .summary-item div{font-size:1.3rem;} #incomeExpenseChartContainer, #graficoContainer { padding: 15px;} #incomeExpenseChart, #grafico {max-height:280px;} #legenda>div {min-width: 100px; font-size: 0.85rem;} .analysis-content { padding: 15px; } .analysis-content h4 { font-size: 1.05rem; } }
+    @media(max-width:380px){ .summary-grid { grid-template-columns: 1fr; } .title-bar h1 {font-size: 1.4rem;} }
+
+    /* Custom Modal Styles */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
+    .modal-overlay.active { opacity: 1; visibility: visible; }
+    .modal-content { background: #fff; padding: 25px 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); text-align: center; max-width: 400px; width: 90%; transform: scale(0.9); transition: transform 0.3s ease; }
+    .modal-overlay.active .modal-content { transform: scale(1); }
+    body.dark-mode .modal-content { background: #2c2f36; color: #ddd; }
+    .modal-content h4 { font-size: 1.4rem; margin-bottom: 15px; color: #333; }
+    body.dark-mode .modal-content h4 { color: #eee; }
+    .modal-content p { font-size: 1rem; margin-bottom: 20px; line-height: 1.5; }
+    .modal-buttons { display: flex; justify-content: center; gap: 15px; }
+    .modal-buttons button { padding: 10px 20px; border-radius: 6px; font-size: 0.95rem; cursor: pointer; border: none; transition: background-color 0.2s; }
+    .modal-btn-confirm { background-color: #4e54c8; color: #fff; }
+    .modal-btn-confirm:hover { background-color: #3b3f9c; }
+    .modal-btn-cancel { background-color: #e0e0e0; color: #333; }
+    .modal-btn-cancel:hover { background-color: #c7c7c7; }
+    body.dark-mode .modal-btn-cancel { background-color: #4a4e57; color: #ddd; }
+    body.dark-mode .modal-btn-cancel:hover { background-color: #5a5e67; }
+
+    /* PDF Generating Modal Styles */
+    #pdfGeneratingModal .modal-content { padding: 30px; }
+    #pdfGeneratingModal p { font-size: 1.1rem; }
+    #pdfGeneratingModal .spinner {
+        width: 40px; height: 40px;
+        border: 4px solid rgba(0,0,0,0.1);
+        border-left-color: #4e54c8;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 15px auto;
+    }
+    body.dark-mode #pdfGeneratingModal .spinner {
+        border-left-color: #8f94fb;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+  </style>
+</head>
+<body>
+  <div class="container" id="exportable">
+    <div class="title-bar"> <h1>Simulador de Orçamento</h1>
+      <button class="dark-mode-toggle" aria-label="Alternar modo escuro/claro">☀️</button>
+    </div>
+
+    <div class="export-header"></div> <div class="controls budget-type" data-pdf-page-content="1-noexport">
+      <label><input type="radio" name="budgetType" value="mensal" checked> Mensal</label>
+      <label><input type="radio" name="budgetType" value="diario"> Diário</label>
+      <input type="month" id="dateMonthly" aria-label="Selecionar Mês">
+      <input type="date" id="dateDaily" style="display:none;" aria-label="Selecionar Dia">
+    </div>
+
+    <div class="controls" data-pdf-page-content="1-noexport">
+      <select id="budgetList" aria-label="Selecionar Orçamento Salvo"><option value="">— Selecionar Orçamento Salvo —</option></select>
+      <button id="loadBtn">Carregar</button>
+      <button id="saveBtn">Salvar</button>
+      <button id="resetBtn">Resetar</button>
+      <button id="exportPdfBtn">Exportar PDF</button>
+    </div>
+
+    <div class="section" id="rendimentosSection"> <h3>Rendimentos</h3>
+      <div id="rendimentos"></div>
+      <button class="add-button" id="addIncomeBtn" data-pdf-page-content="1-noexport">+ Adicionar Rendimento</button>
+    </div>
+
+    <div class="section" id="despesasSection"> <h3>Despesas</h3>
+      <div id="despesas"></div>
+      <button class="add-button" id="addExpenseBtn" data-pdf-page-content="1-noexport">+ Adicionar Despesa</button>
+    </div>
+
+    <div class="summary-grid" id="summaryGrid"> <div class="summary-item" id="totalIncome"> Total Rendimentos<div>€ 0,00</div> </div>
+      <div class="summary-item" id="totalExpenses"> Total Despesas<div>€ 0,00</div> </div>
+      <div class="summary-item" id="saldo"> Saldo<div>€ 0,00</div> </div>
+      <div class="summary-item" id="fundoEmergencia"> Fundo Emergência<div>€ 0,00</div> </div>
+    </div>
+
+    <div id="incomeExpenseChartContainer"> <h3 class="chart-title">Rendimentos vs Despesas Totais</h3>
+        <canvas id="incomeExpenseChart"></canvas>
+    </div>
+
+    <div id="graficoContainer"> <h3 class="chart-title">Detalhe das Despesas</h3>
+      <canvas id="grafico"></canvas>
+      <div id="legenda"></div>
+    </div>
+
+    <div class="section" id="budgetAnalysisSection"> <h3 class="chart-title">Análise do Orçamento</h3> 
+        <div id="analysisResults" class="analysis-content">
+            <p>Preencha o seu orçamento para ver a análise e conselhos personalizados.</p>
+        </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="customModal">
+    <div class="modal-content">
+      <h4 id="modalTitle"></h4>
+      <p id="modalMessage"></p>
+      <div class="modal-buttons">
+        <button id="modalConfirmBtn" class="modal-btn-confirm">Confirmar</button>
+        <button id="modalCancelBtn" class="modal-btn-cancel">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="pdfGeneratingModal">
+    <div class="modal-content">
+      <div class="spinner"></div>
+      <p>A gerar PDF, por favor aguarde...</p>
+    </div>
+  </div>
+
+
+  <script type="module">
+    // Firebase SDK imports
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, query, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Firebase configuration (to be provided by the environment)
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-budget-app';
+    
+    let db, auth, userId, app;
+    let unsubscribeBudgets = null; 
+
+    // --- Custom Modal Functions (including PDF generating modal) ---
+    const customModal = document.getElementById('customModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalMessage = document.getElementById('modalMessage');
+    const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+    const modalCancelBtn = document.getElementById('modalCancelBtn');
+    let confirmCallback = null;
+    let cancelCallback = null;
+
+    const pdfGeneratingModal = document.getElementById('pdfGeneratingModal');
+
+    function showPdfGeneratingModal() {
+        if(pdfGeneratingModal) pdfGeneratingModal.classList.add('active');
+    }
+    function hidePdfGeneratingModal() {
+        if(pdfGeneratingModal) pdfGeneratingModal.classList.remove('active');
+    }
+
+    function showModal(title, message, onConfirm, confirmText = "Confirmar", onCancel, cancelText = "Cancelar") {
+        if (!customModal || !modalTitle || !modalMessage || !modalConfirmBtn || !modalCancelBtn) return;
+        modalTitle.textContent = title;
+        modalMessage.innerHTML = message; 
+        
+        if (onConfirm) {
+            modalConfirmBtn.style.display = 'inline-block';
+            modalConfirmBtn.textContent = confirmText;
+            confirmCallback = onConfirm;
+        } else {
+            modalConfirmBtn.style.display = 'none';
+        }
+
+        if (onCancel || onConfirm) { 
+            modalCancelBtn.style.display = 'inline-block';
+            modalCancelBtn.textContent = cancelText;
+            cancelCallback = onCancel;
+        } else { 
+            modalCancelBtn.style.display = 'none';
+            modalConfirmBtn.style.display = 'inline-block'; 
+            modalConfirmBtn.textContent = "OK";
+            confirmCallback = closeModal; 
+        }
+        customModal.classList.add('active');
+    }
+
+    function closeModal() {
+        if(customModal) customModal.classList.remove('active');
+        confirmCallback = null;
+        cancelCallback = null;
+    }
+
+    if(modalConfirmBtn) modalConfirmBtn.addEventListener('click', () => {
+        if (confirmCallback) confirmCallback();
+        closeModal();
+    });
+
+    if(modalCancelBtn) modalCancelBtn.addEventListener('click', () => {
+        if (cancelCallback) cancelCallback();
+        closeModal();
+    });
+    // --- End Custom Modal Functions ---
+
+    if (firebaseConfig) {
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+        } catch (error) {
+            console.error("Error initializing Firebase:", error);
+            document.addEventListener('DOMContentLoaded', () => {
+                showModal("Erro de Inicialização", "Não foi possível conectar à base de dados. Algumas funcionalidades podem não estar disponíveis.", null, "OK");
+            });
+        }
+    } else {
+        console.warn("Firebase configuration not found. App will run without database persistence.");
+        document.addEventListener('DOMContentLoaded', () => {
+            showModal("Configuração Ausente", "A configuração da base de dados não foi encontrada. Os dados não serão salvos permanentemente.", null, "OK");
+        });
+    }
+
+    // --- Main Application Logic ---
+    (() => {
+      'use strict';
+      let expensePieChart = null;
+      let incomeExpenseBarChart = null;
+
+      const $ = s => document.querySelector(s), $$ = s => Array.from(document.querySelectorAll(s));
+      const categorias = { "🏠 Habitação":"#FF6384","👕 Vestuário":"#36A2EB","🍽️ Alimentação":"#2980B9", "🎭 Lazer":"#4CAF50","🚗 Transporte":"#9C27B0","📚 Educação":"#FF4500", "🩺 Saúde":"#20B2AA","📞 Telecom":"#4682B4","💡 Eletricidade":"#FFD700", "💧 Água":"#00BFFF","🔥 Gás":"#DC143C","⚽ Desporto":"#E67E22","🧩 Outros":"#95A5A6" };
+      const categoriasR = { "💼 Salário":"#4CAF50","💸 Mesada":"#FF9800","🤑 Semanada":"#9C27B0", "🎁 Prenda":"#E91E63","📈 Lucro":"#00BCD4","💹 Juro":"#8BC34A", "💵 Dividendos":"#FFC107","🏠 Renda":"#03A9F4", "🧩 Outros": "#78909C" };
+
+      function initDarkMode(){
+        const toggle = $('.dark-mode-toggle');
+        if (!toggle) return;
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (localStorage.getItem('darkMode') === 'enabled' || (prefersDark && localStorage.getItem('darkMode') !== 'disabled')) {
+            document.body.classList.add('dark-mode');
+            toggle.textContent = '🌙';
+        } else {
+            toggle.textContent = '☀️';
+        }
+        toggle.onclick = () => {
+            document.body.classList.toggle('dark-mode');
+            if (document.body.classList.contains('dark-mode')) {
+                localStorage.setItem('darkMode', 'enabled');
+                toggle.textContent = '🌙';
+            } else {
+                localStorage.setItem('darkMode', 'disabled');
+                toggle.textContent = '☀️';
+            }
+            const { totR, totD } = getCurrentTotals();
+            renderExpensePieChart(false); 
+            renderIncomeExpenseChart(totR, totD, false);
+        };
+      }
+
+      function initDateToggle(){
+        const typeRadios = $$('input[name="budgetType"]');
+        const monthlyInput = $('#dateMonthly');
+        const dailyInput = $('#dateDaily');
+        if(!monthlyInput || !dailyInput || typeRadios.length === 0) return;
+
+        const today = new Date();
+        const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        const currentDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+        monthlyInput.value = currentMonth;
+        dailyInput.value = currentDate;
+
+        typeRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.value === 'mensal') {
+                    monthlyInput.style.display = 'block';
+                    dailyInput.style.display = 'none';
+                } else {
+                    monthlyInput.style.display = 'none';
+                    dailyInput.style.display = 'block';
+                }
+                if (auth && userId) populateList(); 
+                calcularOrcamento();
+            });
+        });
+      }
+
+      function makeRow(type, val = 0, cat = null, other = ''){
+        const row = document.createElement('div');
+        row.className = 'data-row';
+        const cats = type === 'rendimento' ? categoriasR : categorias;
+        const defaultCat = Object.keys(cats)[0];
+        let optionsHTML = '';
+        for(const k in cats){ optionsHTML += `<option value="${k}" ${cat === k ? 'selected' : ''}>${k}</option>`; }
+
+        row.innerHTML = `
+            <select aria-label="Categoria">${optionsHTML}</select>
+            <input type="number" value="${val === 0 ? '' : val}" placeholder="0.00" aria-label="Valor" min="0" step="0.01">
+            <button class="remove-btn" aria-label="Remover Linha">🗑️</button>
+        `;
+        const sel = row.querySelector('select');
+        if (cat) sel.value = cat; else sel.value = defaultCat;
+
+        if (sel.value === '🧩 Outros' || (cat && cat.startsWith('🧩 Outros') && other)) {
+            toggleOutros(row, sel, other);
+        }
+        
+        sel.addEventListener('change', () => {
+            toggleOutros(row, sel);
+            calcularOrcamento();
+        });
+        row.querySelector('input[type="number"]').addEventListener('input', calcularOrcamento);
+        row.querySelector('.remove-btn').onclick = () => {
+            row.classList.add('animate-remove');
+            setTimeout(() => { row.remove(); calcularOrcamento(); }, 400);
+        };
+        return row;
+      }
+
+      function toggleOutros(row, selInstance, otherText = ''){
+        let outrosInput = row.querySelector('.outros-input');
+        if (selInstance.value === '🧩 Outros') {
+            if (!outrosInput) {
+                outrosInput = document.createElement('input');
+                outrosInput.type = 'text';
+                outrosInput.className = 'outros-input';
+                outrosInput.placeholder = 'Descrição Outros';
+                outrosInput.value = otherText;
+                outrosInput.setAttribute('aria-label', 'Descrição Outros');
+                row.insertBefore(outrosInput, row.querySelector('.remove-btn'));
+                row.classList.add('has-outros');
+                outrosInput.addEventListener('input', calcularOrcamento);
+            }
+        } else {
+            if (outrosInput) {
+                outrosInput.remove();
+                row.classList.remove('has-outros');
+            }
+        }
+      }
+
+      async function saveBudget() {
+        if (!db || !userId) {
+            showModal("Erro de Base de Dados", "Não é possível salvar. A conexão com a base de dados não está ativa ou não está autenticado.", null, "OK");
+            return;
+        }
+
+        const budgetType = $('input[name="budgetType"]:checked').value;
+        let dateValue = budgetType === 'mensal' ? $('#dateMonthly').value : $('#dateDaily').value;
+        let budgetId = '';
+        let yyyy_val, mm_val, dd_val;
+
+        if (!dateValue) { 
+            const d_cur = new Date();
+            yyyy_val = d_cur.getFullYear(); 
+            mm_val = String(d_cur.getMonth() + 1).padStart(2, '0');
+            if (budgetType === 'mensal') {
+                dateValue = `${yyyy_val}-${mm_val}`;
+                $('#dateMonthly').value = dateValue;
+            } else {
+                dd_val = String(d_cur.getDate()).padStart(2, '0');
+                dateValue = `${yyyy_val}-${mm_val}-${dd_val}`;
+                $('#dateDaily').value = dateValue;
+            }
+        }
+        
+        if (budgetType === 'mensal') {
+            [yyyy_val, mm_val] = dateValue.split('-');
+            budgetId = `Mensal_${yyyy_val}-${mm_val}`; 
+        } else {
+            [yyyy_val, mm_val, dd_val] = dateValue.split('-');
+            budgetId = `Diario_${yyyy_val}-${mm_val}-${dd_val}`; 
+        }
+
+        const budgetData = {
+            userDisplayId: budgetType === 'mensal' ? `Mensal ${mm_val}/${yyyy_val}` : `Diário ${dd_val}/${mm_val}/${yyyy_val}`,
+            type: budgetType,
+            date: dateValue,
+            rend: $$('#rendimentos .data-row').map(r => ({ v: +r.querySelector('input[type="number"]').value || 0, c: r.querySelector('select').value, o: r.querySelector('.outros-input')?.value || null })),
+            desp: $$('#despesas .data-row').map(r => ({ v: +r.querySelector('input[type="number"]').value || 0, c: r.querySelector('select').value, o: r.querySelector('.outros-input')?.value || null })),
+            updatedAt: serverTimestamp() 
+        };
+
+        const budgetDocRef = doc(db, "artifacts", appId, "users", userId, "budgets", budgetId);
+
+        try {
+            const docSnap = await getDoc(budgetDocRef);
+            if (docSnap.exists()) {
+                showModal(
+                    "Substituir Orçamento?",
+                    `Já existe um orçamento para "${budgetData.userDisplayId}". Deseja substituí-lo?`,
+                    async () => {
+                        await setDoc(budgetDocRef, budgetData);
+                        showModal("Sucesso", `Orçamento "${budgetData.userDisplayId}" salvo com sucesso!`, null, "OK");
+                    }, "Substituir", null, "Cancelar"
+                );
+            } else {
+                await setDoc(budgetDocRef, budgetData);
+                showModal("Sucesso", `Orçamento "${budgetData.userDisplayId}" salvo com sucesso!`, null, "OK");
+            }
+        } catch (error) {
+            console.error("Error saving budget to Firestore: ", error);
+            showModal("Erro ao Salvar", "Ocorreu um erro ao salvar o orçamento. Tente novamente.", null, "OK");
+        }
+      }
+
+      function populateList() {
+        if (!db || !userId) { 
+            const budgetListSelect = $('#budgetList');
+            if (budgetListSelect) budgetListSelect.innerHTML = '<option value="">Base de dados indisponível</option>';
+            return; 
+        }
+
+        const budgetListSelect = $('#budgetList');
+        if (!budgetListSelect) return;
+        budgetListSelect.innerHTML = '<option value="">— Carregando Orçamentos... —</option>'; 
+
+        if (unsubscribeBudgets) unsubscribeBudgets();
+
+        const budgetsColRef = collection(db, "artifacts", appId, "users", userId, "budgets");
+        const q = query(budgetsColRef); 
+
+        unsubscribeBudgets = onSnapshot(q, (querySnapshot) => {
+            const budgets = [];
+            querySnapshot.forEach((doc) => {
+                budgets.push({ id: doc.id, ...doc.data() });
+            });
+            
+            budgets.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+            budgetListSelect.innerHTML = '<option value="">— Selecionar Orçamento Salvo —</option>'; 
+            if (budgets.length === 0) {
+                const option = document.createElement('option');
+                option.value = "";
+                option.textContent = 'Nenhum orçamento salvo';
+                budgetListSelect.appendChild(option);
+            } else {
+                budgets.forEach(budget => {
+                    const option = document.createElement('option');
+                    option.value = budget.id; 
+                    option.textContent = budget.userDisplayId || budget.id; 
+                    budgetListSelect.appendChild(option);
+                });
+            }
+        }, (error) => {
+            console.error("Error fetching budgets: ", error);
+            budgetListSelect.innerHTML = '<option value="">Erro ao carregar orçamentos</option>';
+            showModal("Erro ao Carregar", "Não foi possível carregar a lista de orçamentos.", null, "OK");
+        });
+      }
+
+      async function loadBudget() {
+        if (!db || !userId) {
+            showModal("Erro de Base de Dados", "Não é possível carregar. A conexão com a base de dados não está ativa.", null, "OK");
+            return;
+        }
+        const budgetListSelect = $('#budgetList');
+        if (!budgetListSelect) return;
+        const budgetId = budgetListSelect.value;
+
+        if (!budgetId) {
+            showModal("Nenhum Orçamento", "Por favor, selecione um orçamento para carregar.", null, "OK");
+            return;
+        }
+
+        const budgetDocRef = doc(db, "artifacts", appId, "users", userId, "budgets", budgetId);
+        try {
+            const docSnap = await getDoc(budgetDocRef);
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                
+                const typeRadio = $(`input[name="budgetType"][value="${data.type}"]`);
+                if (typeRadio) typeRadio.checked = true;
+                
+                const monthlyInput = $('#dateMonthly');
+                const dailyInput = $('#dateDaily');
+                if (data.type === 'mensal') {
+                    if(monthlyInput) monthlyInput.value = data.date;
+                    if(monthlyInput) monthlyInput.style.display = 'block';
+                    if(dailyInput) dailyInput.style.display = 'none';
+                } else {
+                    if(dailyInput) dailyInput.value = data.date;
+                    if(dailyInput) dailyInput.style.display = 'block';
+                    if(monthlyInput) monthlyInput.style.display = 'none';
+                }
+
+                $('#rendimentos').innerHTML = ''; $('#despesas').innerHTML = '';
+                (data.rend || []).forEach(item => { const r = makeRow('rendimento', item.v, item.c, item.o); $('#rendimentos').append(r); r.classList.add('animate-add'); });
+                (data.desp || []).forEach(item => { const r = makeRow('despesa', item.v, item.c, item.o); $('#despesas').append(r); r.classList.add('animate-add'); });
+                
+                if (!$('#rendimentos').firstChild) initRows('rendimento');
+                if (!$('#despesas').firstChild) initRows('despesa');
+
+
+                calcularOrcamento();
+                showModal("Sucesso", `Orçamento "${data.userDisplayId || budgetId}" carregado.`, null, "OK");
+            } else {
+                showModal("Erro", "Orçamento não encontrado.", null, "OK");
+            }
+        } catch (error) {
+            console.error("Error loading budget from Firestore: ", error);
+            showModal("Erro ao Carregar", "Ocorreu um erro ao carregar o orçamento.", null, "OK");
+        }
+      }
+
+      function confirmReset() {
+        showModal(
+            "Resetar Campos?",
+            "Tem certeza que deseja limpar todos os campos do orçamento atual? Isto não afetará os orçamentos salvos.",
+            () => {
+                $('#rendimentos').innerHTML = ''; $('#despesas').innerHTML = '';
+                initRows();
+                const today = new Date();
+                const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+                const currentDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                const monthlyInput = $('#dateMonthly');
+                const dailyInput = $('#dateDaily');
+                if(monthlyInput) monthlyInput.value = currentMonth;
+                if(dailyInput) dailyInput.value = currentDate;
+                
+                const typeRadioMensal = $('input[name="budgetType"][value="mensal"]');
+                if(typeRadioMensal) typeRadioMensal.checked = true;
+                if(monthlyInput) monthlyInput.style.display = 'block';
+                if(dailyInput) dailyInput.style.display = 'none';
+                
+                const budgetListSelect = $('#budgetList');
+                if (budgetListSelect) budgetListSelect.value = ""; 
+                calcularOrcamento();
+                showModal("Campos Resetados", "Todos os campos foram limpos.", null, "OK");
+            }, "Resetar", null, "Cancelar"
+        );
+      }
+      
+      function stripEmojis(str) {
+          if (typeof str !== 'string') return '';
+          // Regex to remove a wide range of Unicode characters often used for emojis and symbols
+          // This includes: Emoticons, Miscellaneous Symbols and Pictographs, Transport and Map Symbols,
+          // Miscellaneous Symbols, Dingbats, and more.
+          return str.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{3000}-\u{303F}\u{FE00}-\u{FE0F}]/gu, '').trim();
+      }
+
+      async function exportPDF() {
+        showPdfGeneratingModal();
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const margin = 12; 
+        const contentWidth = pageWidth - (2 * margin);
+        let currentY = margin;
+        let pageNumber = 1;
+
+        function addHeader(pdfDoc, title) {
+            pdfDoc.setFillColor(78, 84, 200); 
+            pdfDoc.rect(0, 0, pageWidth, 22, 'F'); 
+            pdfDoc.setFontSize(15); 
+            pdfDoc.setFont("helvetica", "bold");
+            pdfDoc.setTextColor(255, 255, 255);
+            pdfDoc.text(title, pageWidth / 2, 14, { align: 'center' }); 
+            currentY = 22 + margin; 
+        }
+
+        function addFooter(pdfDoc) {
+            pdfDoc.setFontSize(9); 
+            pdfDoc.setFont("helvetica", "normal");
+            pdfDoc.setTextColor(120); 
+            const footerText = `Página ${pageNumber}`;
+            const textWidth = pdfDoc.getTextWidth(footerText);
+            pdfDoc.text(footerText, pageWidth - margin - textWidth, pageHeight - margin + 5); 
+        }
+
+        function checkPageBreak(neededHeight, headerTitleForNewPage) {
+            if (currentY + neededHeight > pageHeight - margin - 10) { 
+                addFooter(pdf);
+                pdf.addPage();
+                pageNumber++;
+                currentY = margin; 
+                if (headerTitleForNewPage) { 
+                    addHeader(pdf, headerTitleForNewPage);
+                }
+                return true; 
+            }
+            return false;
+        }
+        
+        const isMensal = $('input[name="budgetType"]:checked').value === 'mensal';
+        const rawDateValue = isMensal ? $('#dateMonthly').value : $('#dateDaily').value;
+        let dateVal = ''; let yyyy_val, mm_val, dd_val;
+        const d_cur = new Date();
+        if(isMensal){ 
+            if(rawDateValue){ [yyyy_val,mm_val] = rawDateValue.split('-'); dateVal = `${mm_val}/${yyyy_val}`; } 
+            else { mm_val=String(d_cur.getMonth()+1).padStart(2,'0'); yyyy_val=d_cur.getFullYear(); dateVal = `${mm_val}/${yyyy_val}`; } 
+        } else { 
+            if(rawDateValue){ [yyyy_val,mm_val,dd_val] = rawDateValue.split('-'); dateVal = `${dd_val}/${mm_val}/${yyyy_val}`; } 
+            else { dd_val=String(d_cur.getDate()).padStart(2,'0'); mm_val=String(d_cur.getMonth()+1).padStart(2,'0'); yyyy_val=d_cur.getFullYear(); dateVal = `${dd_val}/${mm_val}/${yyyy_val}`; } 
+        }
+
+        const { totR, totD } = getCurrentTotals();
+        renderIncomeExpenseChart(totR, totD, true); 
+        renderExpensePieChart(true);
+        if(incomeExpenseBarChart) incomeExpenseBarChart.resize();
+        if(expensePieChart) expensePieChart.resize();
+        await new Promise(resolve => setTimeout(resolve, 350)); 
+
+        try { 
+            const page1HeaderTitle = `Orçamento Detalhado – ${dateVal}`;
+            addHeader(pdf, page1HeaderTitle);
+
+            pdf.setFontSize(15); 
+            pdf.setFont("helvetica", "bold");
+            pdf.setTextColor(50, 50, 50); 
+            pdf.text("Resumo do Orçamento", margin, currentY);
+            currentY += 10;
+
+            const summaryItems = [
+                { label: "Total Rendimentos", value: `€ ${totR.toFixed(2)}`, color: [40, 167, 69] }, 
+                { label: "Total Despesas", value: `€ ${totD.toFixed(2)}`, color: [220, 53, 69] },   
+                { label: "Saldo", value: `€ ${(totR - totD).toFixed(2)}`, color: (totR - totD >= 0 ? [40, 167, 69] : [220, 53, 69]) },
+                { label: "Fundo Emergência", value: `€ ${(totR - totD > 0 ? (totR - totD) * 0.3 : 0).toFixed(2)}`, color: [255, 193, 7], textColor: [0,0,0] } 
+            ];
+            const summaryBoxWidth = (contentWidth - 15) / 2; 
+            const summaryBoxHeight = 30; 
+            
+            for (let i = 0; i < summaryItems.length; i++) {
+                if (checkPageBreak(summaryBoxHeight + 7, page1HeaderTitle + " (continuação)")) {} 
+                const item = summaryItems[i];
+                const x = margin + (i % 2) * (summaryBoxWidth + 15);
+                const y = currentY;
+
+                pdf.setFillColor(item.color[0], item.color[1], item.color[2]);
+                pdf.roundedRect(x, y, summaryBoxWidth, summaryBoxHeight, 3, 3, 'F'); 
+                
+                pdf.setFontSize(11); 
+                pdf.setFont("helvetica", "bold");
+                pdf.setTextColor(255, 255, 255);
+                if (item.label === "Fundo Emergência") pdf.setTextColor(item.textColor[0], item.textColor[1], item.textColor[2]);
+                pdf.text(item.label, x + 7, y + 10); 
+                
+                pdf.setFontSize(15); 
+                pdf.text(item.value, x + 7, y + 22); 
+
+                if (i % 2 === 1 || i === summaryItems.length - 1) {
+                    currentY += summaryBoxHeight + 7; 
+                }
+            }
+            currentY += 7; 
+
+            if (checkPageBreak(75, page1HeaderTitle + " (continuação)")) {}
+            pdf.setFontSize(13); 
+            pdf.setFont("helvetica", "bold");
+            pdf.setTextColor(50,50,50);
+            pdf.text("Rendimentos vs Despesas Totais", margin, currentY);
+            currentY += 8;
+            if (incomeExpenseBarChart && incomeExpenseBarChart.canvas) {
+                try {
+                    const imgData = incomeExpenseBarChart.canvas.toDataURL('image/png', 1.0);
+                    const chartHeight = 55; 
+                    const chartWidth = contentWidth * 0.85; 
+                    const chartX = margin + (contentWidth - chartWidth) / 2; 
+                     if (checkPageBreak(chartHeight + 7, page1HeaderTitle + " (Rend. vs Desp. continuação)")) {
+                        pdf.text("Rendimentos vs Despesas Totais (continuação)", margin, currentY); currentY += 8;
+                     }
+                    pdf.addImage(imgData, 'PNG', chartX, currentY, chartWidth, chartHeight);
+                    currentY += chartHeight + 12; 
+                } catch (e) { console.error("Error adding bar chart image:", e); currentY += 10; }
+            }
+
+            const drawSectionTable = (title, items, isIncome) => {
+                if (items.length === 0) return;
+                if (checkPageBreak(25, page1HeaderTitle + " (continuação)")) {}
+                
+                pdf.setFontSize(14); 
+                pdf.setFont("helvetica", "bold");
+                pdf.setTextColor(50,50,50);
+                pdf.text(title, margin, currentY);
+                currentY += 9;
+
+                const col1X = margin;
+                const col2X = margin + contentWidth * 0.40; 
+                const col3X = margin + contentWidth * 0.70; 
+                const headerY = currentY;
+                pdf.setFontSize(10);
+                pdf.setFont("helvetica", "bold");
+                pdf.setTextColor(80,80,80);
+                pdf.text("Categoria", col1X, headerY);
+                pdf.text("Descrição (Outros)", col2X, headerY);
+                pdf.text("Valor (€)", col3X + (contentWidth * 0.30 - margin), headerY, {align: 'right'});
+                currentY += 6;
+                pdf.setLineWidth(0.3); 
+                pdf.setDrawColor(200,200,200); 
+                pdf.line(margin, currentY, pageWidth - margin, currentY);
+                currentY += 4;
+
+                pdf.setFontSize(9.5); 
+                pdf.setFont("helvetica", "normal");
+                pdf.setTextColor(0,0,0);
+                items.forEach(item => {
+                    if (checkPageBreak(10, page1HeaderTitle + ` (${title} continuação)`)) { 
+                        pdf.setFontSize(14); pdf.setFont("helvetica", "bold"); pdf.setTextColor(50,50,50); pdf.text(`${title} (continuação)`, margin, currentY); currentY +=9;
+                        pdf.setFontSize(10); pdf.setFont("helvetica", "bold"); pdf.setTextColor(80,80,80);
+                        pdf.text("Categoria", col1X, currentY); pdf.text("Descrição (Outros)", col2X, currentY); pdf.text("Valor (€)", col3X + (contentWidth * 0.30 - margin), currentY, {align: 'right'});
+                        currentY += 6; pdf.setLineWidth(0.3); pdf.setDrawColor(200,200,200); pdf.line(margin, currentY, pageWidth - margin, currentY); currentY += 4;
+                        pdf.setFontSize(9.5); pdf.setFont("helvetica", "normal"); pdf.setTextColor(0,0,0);
+                    }
+
+                    let categoryText = stripEmojis(item.c); 
+                    let otherText = stripEmojis(item.o || "");
+                    if (categoryText === 'Outros' && item.o) { 
+                    } else if (categoryText.startsWith("Outros:") && item.o) { 
+                         categoryText = "Outros";
+                         otherText = stripEmojis(item.c.substring("Outros: ".length));
+                    }
+
+                    const categoryLines = pdf.splitTextToSize(categoryText, contentWidth * 0.35);
+                    const otherLines = pdf.splitTextToSize(otherText, contentWidth * 0.25);
+                    const valueText = `€ ${item.v.toFixed(2)}`;
+                    
+                    const maxLines = Math.max(categoryLines.length, otherLines.length, 1);
+                    const lineHeight = 4.5; 
+                    const actualRowHeight = maxLines * lineHeight + 3; 
+
+                    if (checkPageBreak(actualRowHeight + 2, page1HeaderTitle + ` (${title} continuação)`)) {
+                         pdf.setFontSize(14); pdf.setFont("helvetica", "bold"); pdf.setTextColor(50,50,50); pdf.text(`${title} (continuação)`, margin, currentY); currentY +=9;
+                         pdf.setFontSize(10); pdf.setFont("helvetica", "bold"); pdf.setTextColor(80,80,80);
+                         pdf.text("Categoria", col1X, currentY); pdf.text("Descrição (Outros)", col2X, currentY); pdf.text("Valor (€)", col3X + (contentWidth * 0.30 - margin), currentY, {align: 'right'});
+                         currentY += 6; pdf.setLineWidth(0.3); pdf.setDrawColor(200,200,200); pdf.line(margin, currentY, pageWidth - margin, currentY); currentY += 4;
+                         pdf.setFontSize(9.5); pdf.setFont("helvetica", "normal"); pdf.setTextColor(0,0,0);
+                    }
+
+                    let tempY = currentY;
+                    categoryLines.forEach(line => { pdf.text(line, col1X, tempY); tempY += lineHeight; });
+                    tempY = currentY; 
+                    otherLines.forEach(line => { pdf.text(line, col2X, tempY); tempY += lineHeight; });
+                    
+                    pdf.text(valueText, col3X + (contentWidth * 0.30 - margin), currentY, {align: 'right'}); 
+
+                    currentY += actualRowHeight;
+                    pdf.setDrawColor(230,230,230); 
+                    pdf.setLineDashPattern([0.5, 0.5], 0); 
+                    pdf.line(margin, currentY -1.5 , pageWidth - margin, currentY -1.5); 
+                    pdf.setLineDashPattern([], 0); 
+                    currentY += 1.5; 
+                });
+                currentY += 10; 
+            };
+
+            const rendimentosData = $$('#rendimentos .data-row').map(r => ({ c: r.querySelector('select').value, o: r.querySelector('.outros-input')?.value || '', v: +r.querySelector('input[type="number"]').value || 0 })).filter(item => item.v > 0);
+            const despesasData = $$('#despesas .data-row').map(r => ({ c: r.querySelector('select').value, o: r.querySelector('.outros-input')?.value || '', v: +r.querySelector('input[type="number"]').value || 0 })).filter(item => item.v > 0);
+            
+            drawSectionTable("Rendimentos", rendimentosData, true);
+            drawSectionTable("Despesas", despesasData, false);
+
+            if (despesasData.length > 0) {
+                if (checkPageBreak(80, page1HeaderTitle + " (continuação)")) {}
+                pdf.setFontSize(13); 
+                pdf.setFont("helvetica", "bold");
+                pdf.setTextColor(50,50,50);
+                pdf.text("Detalhe das Despesas", margin, currentY);
+                currentY += 8;
+
+                if (expensePieChart && expensePieChart.canvas) {
+                    try {
+                        const imgData = expensePieChart.canvas.toDataURL('image/png', 1.0);
+                        const chartHeight = 65; 
+                        const chartWidth = chartHeight * (expensePieChart.canvas.width / expensePieChart.canvas.height); 
+                        const chartX = margin;
+                        if (checkPageBreak(chartHeight + 7, page1HeaderTitle + " (Detalhe Desp. continuação)")) {
+                             pdf.text("Detalhe das Despesas (continuação)", margin, currentY); currentY += 8;
+                        }
+                        pdf.addImage(imgData, 'PNG', chartX, currentY, chartWidth, chartHeight);
+                        
+                        const legendX = chartX + chartWidth + 7; 
+                        let legendY = currentY + 3; 
+                        pdf.setFontSize(8.5); 
+                        pdf.setFont("helvetica", "normal");
+                        const pieChartData = expensePieChart.data.datasets[0].data;
+                        const pieChartLabels = expensePieChart.data.labels.map(label => stripEmojis(label)); 
+                        const pieChartColors = expensePieChart.data.datasets[0].backgroundColor;
+
+                        for(let i=0; i < pieChartData.length; i++) {
+                            if (pieChartData[i] > 0) {
+                                if (legendY > pageHeight - margin - 12) { 
+                                    if (checkPageBreak(12, page1HeaderTitle + " (Legenda continuação)")) {
+                                         pdf.text("Detalhe das Despesas (Legenda - continuação)", margin, currentY); currentY +=8;
+                                    }
+                                    legendY = currentY; 
+                                }
+                                pdf.setFillColor(pieChartColors[i]);
+                                pdf.roundedRect(legendX, legendY - 2.5, 3.5, 3.5, 0.5, 0.5, 'F'); 
+                                pdf.setTextColor(0,0,0);
+                                pdf.text(`${pieChartLabels[i]}: €${pieChartData[i].toFixed(2)}`, legendX + 6, legendY);
+                                legendY += 5; 
+                            }
+                        }
+                        currentY += Math.max(chartHeight, (legendY - (currentY+3))) + 12; 
+
+                    } catch (e) { console.error("Error adding pie chart image:", e); currentY += 10; }
+                }
+            }
+            addFooter(pdf); 
+
+            // --- PAGE 2: Analysis ---
+            const analysisContentEl = $('#analysisResults');
+            const analysisHasContent = analysisContentEl && (analysisContentEl.querySelectorAll('li').length > 0 || (analysisContentEl.querySelector('p') && !analysisContentEl.querySelector('p').textContent.startsWith("Preencha")));
+
+            if (analysisHasContent) {
+                pdf.addPage();
+                pageNumber++;
+                const page2HeaderTitle = `Análise do Orçamento – ${dateVal}`;
+                addHeader(pdf, page2HeaderTitle);
+                
+                pdf.setFontSize(10);
+                pdf.setFont("helvetica", "normal");
+                pdf.setTextColor(0,0,0);
+
+                const analysisNodes = Array.from(analysisContentEl.childNodes);
+                analysisNodes.forEach(node => {
+                    if (checkPageBreak(12, page2HeaderTitle + " (continuação)")) {}
+
+                    if (node.nodeName === 'H4') {
+                        currentY += 3; 
+                        pdf.setFont("helvetica", "bold");
+                        pdf.setFontSize(13); 
+                        pdf.setTextColor(60,60,60);
+                        const lines = pdf.splitTextToSize(stripEmojis(node.textContent.trim()), contentWidth); 
+                        pdf.text(lines, margin, currentY);
+                        currentY += (lines.length * 5.5) + 3; 
+                        pdf.setFont("helvetica", "normal");
+                        pdf.setFontSize(10);
+                        pdf.setTextColor(0,0,0);
+                    } else if (node.nodeName === 'UL') {
+                        currentY += 2;
+                        Array.from(node.childNodes).forEach(liNode => {
+                            if (liNode.nodeName === 'LI') {
+                                if (checkPageBreak(10, page2HeaderTitle + " (continuação)")) {}
+                                
+                                const defaultColor = [0,0,0];
+                                let textColor = defaultColor;
+                                let isBold = false;
+
+                                if (liNode.querySelector('.analysis-advice-positive')) {
+                                    textColor = [39, 174, 96]; // Green
+                                    isBold = true;
+                                } else if (liNode.querySelector('.analysis-advice-negative')) {
+                                    textColor = [192, 57, 43]; // Red
+                                    isBold = true;
+                                } else if (liNode.querySelector('.analysis-advice-neutral')) {
+                                    textColor = [127, 140, 141]; // Grey
+                                }
+                                
+                                pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
+                                if(isBold) pdf.setFont("helvetica", "bold");
+                                else pdf.setFont("helvetica", "normal");
+
+                                let fullText = "•  " + stripEmojis(liNode.textContent.trim()); 
+                                const lines = pdf.splitTextToSize(fullText, contentWidth - 6); 
+                                pdf.text(lines, margin + 4, currentY); 
+                                currentY += lines.length * 5 + 1.5; 
+                                
+                                // Reset to default for next LI or element
+                                pdf.setTextColor(0,0,0);
+                                pdf.setFont("helvetica", "normal");
+                            }
+                        });
+                        currentY += 3;
+                    } else if (node.nodeName === 'P') {
+                        const lines = pdf.splitTextToSize(stripEmojis(node.textContent.trim()), contentWidth); 
+                        pdf.text(lines, margin, currentY);
+                        currentY += (lines.length * 5) + 3;
+                    }
+                });
+                addFooter(pdf);
+            }
+
+            const today = new Date(); 
+            const formattedFileDate = `${String(today.getDate()).padStart(2,'0')}-${String(today.getMonth()+1).padStart(2,'0')}-${today.getFullYear()}`;
+            const filename = `Orcamento_${dateVal.replace(/\//g, '-')}_${formattedFileDate}.pdf`;
+            pdf.save(filename);
+            showModal("PDF Exportado", `O ficheiro ${filename} foi gerado com sucesso.`, null, "OK");
+
+        } catch (err) { 
+            console.error("Erro ao exportar PDF:", err);
+            showModal("Erro de Exportação", "Ocorreu um erro ao tentar exportar o orçamento como PDF. Verifique a consola para mais detalhes.", null, "OK");
+        } finally {
+            hidePdfGeneratingModal(); 
+            const { totR: r, totD: d } = getCurrentTotals(); 
+            renderExpensePieChart(false); 
+            renderIncomeExpenseChart(r, d, false);
+        }
+    }
+
+
+      function addImageToPdf(pdfInstance, canvas, pageWidth, pageHeight) {
+        const imgData = canvas.toDataURL('image/png', 0.95); 
+        const imgProps = pdfInstance.getImageProperties(imgData);
+        const margin = 10; 
+        const pdfWidth = pageWidth - (2 * margin); 
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        let finalHeight = pdfHeight;
+        let finalWidth = pdfWidth;
+        const pageMaxHeight = pageHeight - (2 * margin); 
+
+        if (pdfHeight > pageMaxHeight) {
+            finalHeight = pageMaxHeight;
+            finalWidth = (imgProps.width * finalHeight) / imgProps.height;
+        }
+        const xOffset = (pageWidth - finalWidth) / 2;
+        pdfInstance.addImage(imgData, 'PNG', xOffset, margin, finalWidth, finalHeight);
+      }
+
+      function animateSummaryUpdate(element) { if (!element) return; element.classList.remove('animate-update'); void element.offsetWidth; element.classList.add('animate-update'); }
+      
+      function renderExpensePieChart(isExporting = false){
+        const canvas = $('#grafico');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const legenda = $('#legenda');
+        if (legenda) legenda.innerHTML = '';
+        
+        const despesas = $$('#despesas .data-row').map(r => {
+            const val = +r.querySelector('input[type="number"]').value || 0;
+            let cat = r.querySelector('select').value;
+            const other = r.querySelector('.outros-input')?.value;
+            // For UI, keep emojis. For PDF, emojis are stripped in exportPDF.
+            if (cat === '🧩 Outros' && other && !isExporting) cat = `🧩 Outros: ${other.substring(0,20)}${other.length > 20 ? '...' : ''}`;
+            else if (cat === '🧩 Outros' && other && isExporting) cat = `Outros: ${stripEmojis(other).substring(0,20)}${stripEmojis(other).length > 20 ? '...' : ''}`;
+            else if (isExporting) cat = stripEmojis(cat); // Make sure all categories are stripped for chart data if exporting
+
+            return { valor: val, categoria: cat, cor: categorias[r.querySelector('select').value] || '#ccc' };
+        }).filter(d => d.valor > 0);
+
+        const data = {
+            labels: despesas.map(d => d.categoria), // Labels for chart.js (can have emojis for UI)
+            datasets: [{
+                data: despesas.map(d => d.valor),
+                backgroundColor: despesas.map(d => d.cor),
+                borderColor: isExporting ? '#7f8c8d' : (document.body.classList.contains('dark-mode') ? '#24262e' : '#fff'),
+                borderWidth: isExporting ? 1 : 2,
+            }]
+        };
+        if (legenda && !isExporting) { // Only populate HTML legend for UI
+            $$('#despesas .data-row').filter(r => (+r.querySelector('input[type="number"]').value || 0) > 0).forEach(r_el => {
+                let cat_ui = r_el.querySelector('select').value;
+                const other_ui = r_el.querySelector('.outros-input')?.value;
+                if (cat_ui === '🧩 Outros' && other_ui) cat_ui = `🧩 Outros: ${other_ui.substring(0,20)}${other_ui.length > 20 ? '...' : ''}`;
+                const val_ui = +r_el.querySelector('input[type="number"]').value;
+                const cor_ui = categorias[r_el.querySelector('select').value] || '#ccc';
+                legenda.innerHTML += `<div><div style="background-color:${cor_ui};"></div><span>${cat_ui}: €${val_ui.toFixed(2)}</span></div>`;
+            });
+        }
+
+
+        if(expensePieChart) expensePieChart.destroy();
+        expensePieChart = new Chart(ctx, {
+            type: 'doughnut', data,
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '60%',
+                plugins: {
+                    legend: { display: false }, // PDF legend is drawn manually
+                    tooltip: { enabled: true, callbacks: { label: c => `${c.label}: €${c.raw.toFixed(2)}` } }, // Tooltip uses chart's labels
+                    datalabels: {
+                        display: (context) => { 
+                            const value = context.dataset.data[context.dataIndex];
+                            const total = context.dataset.data.reduce((acc, val) => acc + val, 0);
+                            if (total === 0) return false;
+                            const percentage = (value / total) * 100;
+                            return isExporting ? percentage > 2 : percentage > 5; 
+                        },
+                        formatter: (value, context) => {
+                            const label = stripEmojis(context.chart.data.labels[context.dataIndex]); // Strip for datalabel text too
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) + '%' : '0%';
+                            return `${label.split(':')[0]}\n${percentage}`; 
+                        },
+                        color: (context) => {
+                            if (isExporting) return '#333';
+                            const bgColor = context.dataset.backgroundColor[context.dataIndex];
+                            let r = 0, g = 0, b = 0;
+                            if (bgColor && bgColor.startsWith('#')) {
+                                const hex = bgColor.replace('#', '');
+                                if (hex.length === 3) {
+                                    r = parseInt(hex[0] + hex[0], 16); g = parseInt(hex[1] + hex[1], 16); b = parseInt(hex[2] + hex[2], 16);
+                                } else if (hex.length === 6) {
+                                    r = parseInt(hex.substring(0, 2), 16); g = parseInt(hex.substring(2, 4), 16); b = parseInt(hex.substring(4, 6), 16);
+                                }
+                            } else if (bgColor && bgColor.startsWith('rgb')) { 
+                                const parts = bgColor.match(/[\d.]+/g);
+                                if (parts && parts.length >= 3) { r = parseInt(parts[0]); g = parseInt(parts[1]); b = parseInt(parts[2]); }
+                            }
+                            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                            return brightness > 125 ? '#000' : '#fff';
+                        },
+                        font: { weight: 'bold', size: isExporting ? 9 : 10 },
+                        textAlign: 'center',
+                        backgroundColor: isExporting ? null : (context) => context.dataset.backgroundColor,
+                        borderColor: isExporting ? null : (document.body.classList.contains('dark-mode') ? '#24262e' : '#fff'),
+                        borderWidth: isExporting ? 0 : 2,
+                        borderRadius: 4,
+                        padding: isExporting ? 2 : 4,
+                    }
+                },
+                animation: { duration: isExporting ? 0 : 500 }
+            },
+            plugins: [ChartDataLabels]
+        });
+      }
+
+      function renderIncomeExpenseChart(totalIncome, totalExpenses, isExporting = false) {
+        const canvas = $('#incomeExpenseChart');
+        if(!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const data = {
+            labels: ['Rendimentos', 'Despesas'],
+            datasets: [{
+                label: 'Valor (€)',
+                data: [totalIncome, totalExpenses],
+                backgroundColor: ['#28a745', '#dc3545'],
+                borderColor: isExporting ? ['#1e7e34','#b21f2d'] : (document.body.classList.contains('dark-mode') ? '#24262e' : '#fff'),
+                borderWidth: isExporting ? 1 : 2,
+                borderRadius: 4,
+            }]
+        };
+        if(incomeExpenseBarChart) incomeExpenseBarChart.destroy();
+        incomeExpenseBarChart = new Chart(ctx, {
+            type: 'bar', data,
+            options: {
+                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                scales: { 
+                    x: { 
+                        beginAtZero: true, 
+                        grid: { color: isExporting ? '#ddd' : (document.body.classList.contains('dark-mode') ? '#444' : '#eee') }, 
+                        ticks: { color: isExporting ? '#333' : (document.body.classList.contains('dark-mode') ? '#ccc' : '#333') } 
+                    }, 
+                    y: { 
+                        grid: { display: false }, 
+                        ticks: { color: isExporting ? '#333' : (document.body.classList.contains('dark-mode') ? '#ccc' : '#333'), font: {size: isExporting ? 10 : 14} } 
+                    } 
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: true, callbacks: { label: c => `€${c.raw.toFixed(2)}` } },
+                    datalabels: {
+                        display: true,
+                        anchor: 'end',
+                        align: 'end',
+                        formatter: (value) => `€${value.toFixed(2)}`,
+                        color: isExporting ? '#333' : (document.body.classList.contains('dark-mode') ? '#eee' : '#333'),
+                        font: { weight: 'bold', size: isExporting ? 10 : 12 }
+                    }
+                },
+                animation: { duration: isExporting ? 0 : 500 }
+            },
+            plugins: [ChartDataLabels]
+        });
+      }
+
+      function getCurrentTotals() {
+        const totR = $$('#rendimentos .data-row input[type="number"]').reduce((s,c)=>s+(+c.value||0),0);
+        const totD = $$('#despesas .data-row input[type="number"]').reduce((s,c)=>s+(+c.value||0),0);
+        return { totR, totD };
+      }
+      
+      function generateBudgetAnalysis(totalIncome, totalExpenses, saldo, emergencyFundContribution, expensesDetails) {
+        const analysisEl = $('#analysisResults'); 
+        if (!analysisEl) { console.error("Element #analysisResults not found!"); return; }
+        
+        let html = '';
+        const hasAnyIncome = $$('#rendimentos .data-row input[type="number"]').some(i => +i.value > 0);
+        const hasAnyExpense = $$('#despesas .data-row input[type="number"]').some(i => +i.value > 0);
+
+        if (!hasAnyIncome && !hasAnyExpense && totalIncome === 0 && totalExpenses === 0) {
+            html = '<p>Preencha os seus rendimentos e despesas para receber uma análise detalhada e conselhos personalizados para o seu orçamento.</p>';
+            analysisEl.innerHTML = html; 
+            return;
+        }
+        
+        html += '<h4>Situação Geral do Saldo:</h4><ul>';
+        if (saldo > 0) {
+            html += `<li><span class="analysis-advice-positive">Excelente!</span> Saldo positivo de <strong>€${saldo.toFixed(2)}</strong>. Está a gerir bem as suas finanças!</li>`;
+            html += `<li><strong>Próximos Passos:</strong> Considere usar este excedente para aumentar poupanças, investir, ou amortizar dívidas.</li>`;
+            if (totalExpenses > 0 && emergencyFundContribution < (totalExpenses * 0.25)) { html += `<li>Priorize o reforço do seu <strong>Fundo de Emergência</strong>. Um bom objetivo é ter o equivalente a 3-6 meses de despesas essenciais.</li>`; }
+        } else if (saldo < 0) {
+            html += `<li><span class="analysis-advice-negative">Atenção!</span> Saldo negativo de <strong>€${Math.abs(saldo).toFixed(2)}</strong>. É fundamental ajustar o seu orçamento.</li>`;
+            html += `<li><strong>Ação Imediata:</strong> Reveja todas as suas despesas, começando pelas categorias não essenciais (Lazer, Vestuário, "Outros"). Procure formas de aumentar os seus rendimentos, se possível.</li>`;
+        } else {
+            html += `<li><span class="analysis-advice-neutral">Orçamento Equilibrado (Saldo €0.00).</span> Não está a gastar mais do que ganha, o que é um bom ponto de partida. No entanto, não há margem para poupança ou imprevistos.</li>`;
+            html += `<li><strong>Sugestão:</strong> Tente identificar pequenas despesas que possam ser otimizadas para criar um saldo positivo, mesmo que reduzido.</li>`;
+        }
+        html += '</ul>';
+        html += `<h4>Fundo de Emergência (Contribuição do Período):</h4><ul>`;
+        if (emergencyFundContribution > 0) { html += `<li>Alocou <strong>€${emergencyFundContribution.toFixed(2)}</strong> para o Fundo de Emergência. <span class="analysis-advice-positive">Muito bom!</span></li>`; }
+        else if (saldo > 0) { html += `<li><span class="analysis-advice-neutral">O seu saldo foi positivo, mas a contribuição para o Fundo de Emergência foi €0.00.</span> Considere tornar esta poupança uma prioridade.</li>`; }
+        else { html += `<li><span class="analysis-advice-neutral">Não foi possível contribuir para o Fundo de Emergência devido ao saldo não positivo.</span> Concentre-se em equilibrar o orçamento.</li>`; }
+        html += `<li><strong>Lembrete Financeiro:</strong> Um Fundo de Emergência robusto (3-6 meses de despesas) oferece segurança e tranquilidade perante imprevistos.</li></ul>`;
+        if (totalExpenses > 0 && totalIncome > 0) {
+            html += '<h4>Análise Detalhada das Despesas:</h4><ul>';
+            const expenseRatio = totalExpenses / totalIncome; let ratioAdvice = '';
+            if (expenseRatio > 0.9) { ratioAdvice = `<span class="analysis-advice-negative">Alerta Crítico!</span> As suas despesas (<strong>${(expenseRatio * 100).toFixed(0)}%</strong> dos rendimentos) estão excessivamente altas, deixando pouca ou nenhuma margem. É crucial uma revisão imediata e profunda.`; }
+            else if (expenseRatio > 0.75) { ratioAdvice = `<span class="analysis-advice-negative">Despesas Elevadas.</span> Com <strong>${(expenseRatio * 100).toFixed(0)}%</strong> dos seus rendimentos comprometidos com despesas, a sua capacidade de poupança e investimento está limitada. Procure otimizações.`; }
+            else if (expenseRatio > 0.5) { ratioAdvice = `<span class="analysis-advice-neutral">Controlo Razoável.</span> As suas despesas (<strong>${(expenseRatio * 100).toFixed(0)}%</strong> dos rendimentos) estão controladas, mas há espaço para melhorar a sua taxa de poupança.`; }
+            else { ratioAdvice = `<span class="analysis-advice-positive">Excelente Gestão!</span> As suas despesas (<strong>${(expenseRatio * 100).toFixed(0)}%</strong> dos rendimentos) demonstram um ótimo controlo financeiro.`; }
+            html += `<li>${ratioAdvice}</li>`;
+            const categoryTotals = {}; expensesDetails.forEach(exp => { if (exp.valor > 0) { const catName = exp.categoria.includes('Outros') && exp.outrosTexto ? exp.outrosTexto.trim() : exp.categoria; categoryTotals[catName] = (categoryTotals[catName] || 0) + exp.valor; } });
+            const sortedCategories = Object.entries(categoryTotals).sort(([,a],[,b]) => b-a).slice(0,3);
+            if (sortedCategories.length > 0) {
+                html += `<li>As suas <strong>3 principais categorias de despesa</strong> são:</li><ul style="list-style-type: disclosure-closed; margin-left:15px;">`;
+                sortedCategories.forEach(([cat, amt]) => { html += `<li><strong>${stripEmojis(cat)}:</strong> €${amt.toFixed(2)} (${((amt / totalExpenses) * 100).toFixed(1)}% do total)</li>`; }); // Strip emojis here too for UI consistency
+                html += `</ul><li><strong>Reflexão:</strong> Avalie se estes gastos estão alinhados com as suas prioridades. Há alternativas mais económicas ou otimizações possíveis nestas áreas?</li>`;
+            }
+            html += '</ul>';
+        }
+        html += '<h4>Conselhos Adicionais para Melhorar:</h4><ul>';
+        html += '<li><strong>Planeamento é Chave:</strong> Reveja este orçamento regularmente (semanal ou mensalmente) e ajuste conforme necessário.</li>';
+        html += '<li><strong>Metas Claras:</strong> Defina objetivos financeiros (curto, médio, longo prazo). Saber para onde vai o seu dinheiro ajuda a mantê-lo motivado.</li>';
+        html += '<li><strong>Evite Dívidas Desnecessárias:</strong> Especialmente as de juros altos (cartões de crédito, crédito pessoal). Se tem dívidas, crie um plano para as liquidar.</li>';
+        html += '<li><strong>Pequenas Poupanças Contam:</strong> Reduzir pequenos gastos diários ou semanais pode somar uma quantia significativa ao longo do tempo.</li>';
+        html += '</ul>';
+        analysisEl.innerHTML = html;
+      }
+
+      function calcularOrcamento(){
+        try {
+          const { totR, totD } = getCurrentTotals();
+          const saldo = totR - totD; const fundo = saldo > 0 ? saldo * 0.3 : 0; 
+          const despesasArray = $$('#despesas .data-row').map(r => ({ valor: +r.querySelector('input[type="number"]').value || 0, categoria: r.querySelector('select').value, outrosTexto: r.querySelector('.outros-input')?.value || null }));
+          
+          const totalIncomeDiv = $('#totalIncome div'); if(totalIncomeDiv) { totalIncomeDiv.textContent = `€ ${totR.toFixed(2)}`; animateSummaryUpdate(totalIncomeDiv); }
+          const totalExpensesDiv = $('#totalExpenses div'); if(totalExpensesDiv) { totalExpensesDiv.textContent = `€ ${totD.toFixed(2)}`; animateSummaryUpdate(totalExpensesDiv); }
+          const s=$('#saldo'); if(s) { s.className=`summary-item ${saldo>=0?'positive':'negative'}`; const d = s.querySelector('div'); if(d) { d.textContent = `€ ${saldo.toFixed(2)}`; animateSummaryUpdate(d); } }
+          const f=$('#fundoEmergencia'); if(f) { f.className=`summary-item ${fundo>0?'emergency':''}`; const d = f.querySelector('div'); if(d) { d.textContent = `€ ${fundo.toFixed(2)}`; animateSummaryUpdate(d); } }
+          
+          renderExpensePieChart(false); 
+          renderIncomeExpenseChart(totR, totD, false);
+          generateBudgetAnalysis(totR, totD, saldo, fundo, despesasArray);
+        } catch (error) {
+            console.error("Error in calcularOrcamento:", error);
+            if (!error.message || !error.message.includes("color.red")) { 
+                 showModal("Erro de Cálculo", "Ocorreu um erro ao calcular o orçamento.", null, "OK");
+            }
+        }
+      }
+      
+      function initRows(type = null){ 
+        if (type === 'rendimento' || !type) {
+            const rendContainer = $('#rendimentos');
+            if(rendContainer && rendContainer.children.length === 0) { 
+                const rendRow = makeRow('rendimento'); rendContainer.append(rendRow); rendRow.classList.add('animate-add');
+            }
+        }
+        if (type === 'despesa' || !type) {
+            const despContainer = $('#despesas');
+            if(despContainer && despContainer.children.length === 0) { 
+                const despRow = makeRow('despesa'); despContainer.append(despRow); despRow.classList.add('animate-add');
+            }
+        }
+      }
+
+      async function initializeAppCore() {
+        initDarkMode(); 
+        initDateToggle(); 
+        initRows(); 
+        calcularOrcamento(); 
+
+        if (auth) { 
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Firebase Auth Error:", error);
+                showModal("Erro de Autenticação", "Não foi possível autenticar com a base de dados. Os dados não serão salvos.", null, "OK");
+            }
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    userId = user.uid;
+                    console.log("User authenticated with UID:", userId);
+                    populateList(); 
+                } else {
+                    userId = null; 
+                    console.log("User is signed out or auth failed. App will operate locally for this session.");
+                    const budgetListSelect = $('#budgetList');
+                    if(budgetListSelect) budgetListSelect.innerHTML = '<option value="">Login necessário para salvar/carregar</option>';
+                    if (unsubscribeBudgets) unsubscribeBudgets(); 
+                }
+            });
+        } else {
+            const budgetListSelect = $('#budgetList');
+            if(budgetListSelect) budgetListSelect.innerHTML = '<option value="">Base de dados indisponível</option>';
+        }
+        
+        $('#addIncomeBtn').onclick  = ()=>{ const r = makeRow('rendimento'); $('#rendimentos').append(r); r.classList.add('animate-add'); const i = r.querySelector('input[type="number"]'); if (i) i.focus(); calcularOrcamento(); };
+        $('#addExpenseBtn').onclick = ()=>{ const r = makeRow('despesa'); $('#despesas').append(r); r.classList.add('animate-add'); const i = r.querySelector('input[type="number"]'); if (i) i.focus(); calcularOrcamento(); };
+        $('#saveBtn').onclick = saveBudget; 
+        $('#loadBtn').onclick = loadBudget; 
+        $('#resetBtn').onclick = confirmReset; 
+        $('#exportPdfBtn').onclick = exportPDF;
+      }
+
+      document.addEventListener('DOMContentLoaded', initializeAppCore);
+    })();
+  </script>
+</body>
+</html>
