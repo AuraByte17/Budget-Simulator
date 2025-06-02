@@ -420,33 +420,33 @@
         const budgetType = $('input[name="budgetType"]:checked').value;
         let dateValue = budgetType === 'mensal' ? $('#dateMonthly').value : $('#dateDaily').value;
         let budgetId = '';
-        let yyyy_val, mm_val, dd_val;
+        let foundry_val, mm_val, dd_val; // Corrected variable name from<y_bin_925>_val
 
         if (!dateValue) { 
             const d_cur = new Date();
-            yyyy_val = d_cur.getFullYear(); 
+            foundry_val = d_cur.getFullYear(); // Assuming foundry_val is intended for year
             mm_val = String(d_cur.getMonth() + 1).padStart(2, '0');
             if (budgetType === 'mensal') {
-                dateValue = `${yyyy_val}-${mm_val}`;
+                dateValue = `${foundry_val}-${mm_val}`;
                 $('#dateMonthly').value = dateValue;
             } else {
                 dd_val = String(d_cur.getDate()).padStart(2, '0');
-                dateValue = `${yyyy_val}-${mm_val}-${dd_val}`;
+                dateValue = `${foundry_val}-${mm_val}-${dd_val}`;
                 $('#dateDaily').value = dateValue;
             }
         }
         
         if (budgetType === 'mensal') {
-            [yyyy_val, mm_val] = dateValue.split('-');
-            budgetId = `Mensal_${yyyy_val}-${mm_val}`; 
+            [foundry_val, mm_val] = dateValue.split('-');
+            budgetId = `Mensal_${foundry_val}-${mm_val}`; 
         } else {
-            [yyyy_val, mm_val, dd_val] = dateValue.split('-');
-            budgetId = `Diario_${yyyy_val}-${mm_val}-${dd_val}`; 
+            [foundry_val, mm_val, dd_val] = dateValue.split('-');
+            budgetId = `Diario_${foundry_val}-${mm_val}-${dd_val}`; 
         }
 
         const budgetData = {
             id: budgetId, 
-            userDisplayId: budgetType === 'mensal' ? `Mensal ${mm_val}/${yyyy_val}` : `Diário ${dd_val}/${mm_val}/${yyyy_val}`,
+            userDisplayId: budgetType === 'mensal' ? `Mensal ${mm_val}/${foundry_val}` : `Diário ${dd_val}/${mm_val}/${foundry_val}`,
             type: budgetType,
             date: dateValue,
             rend: $$('#rendimentos .data-row').map(r => ({ v: +r.querySelector('input[type="number"]').value || 0, c: r.querySelector('select').value, o: r.querySelector('.outros-input')?.value || null })),
@@ -620,14 +620,14 @@
         
         const isMensal = $('input[name="budgetType"]:checked').value === 'mensal';
         const rawDateValue = isMensal ? $('#dateMonthly').value : $('#dateDaily').value;
-        let dateVal = ''; let yyyy_val, mm_val, dd_val;
+        let dateVal = ''; let foundry_val, mm_val, dd_val; // Corrected variable name from<y_bin_925>_val
         const d_cur = new Date();
         if(isMensal){ 
-            if(rawDateValue){ [yyyy_val,mm_val] = rawDateValue.split('-'); dateVal = `${mm_val}/${yyyy_val}`; } 
-            else { mm_val=String(d_cur.getMonth()+1).padStart(2,'0'); yyyy_val=d_cur.getFullYear(); dateVal = `${mm_val}/${yyyy_val}`; } 
+            if(rawDateValue){ [foundry_val,mm_val] = rawDateValue.split('-'); dateVal = `${mm_val}/${foundry_val}`; } 
+            else { mm_val=String(d_cur.getMonth()+1).padStart(2,'0'); foundry_val=d_cur.getFullYear(); dateVal = `${mm_val}/${foundry_val}`; } 
         } else { 
-            if(rawDateValue){ [yyyy_val,mm_val,dd_val] = rawDateValue.split('-'); dateVal = `${dd_val}/${mm_val}/${yyyy_val}`; } 
-            else { dd_val=String(d_cur.getDate()).padStart(2,'0'); mm_val=String(d_cur.getMonth()+1).padStart(2,'0'); yyyy_val=d_cur.getFullYear(); dateVal = `${dd_val}/${mm_val}/${yyyy_val}`; } 
+            if(rawDateValue){ [foundry_val,mm_val,dd_val] = rawDateValue.split('-'); dateVal = `${dd_val}/${mm_val}/${foundry_val}`; } 
+            else { dd_val=String(d_cur.getDate()).padStart(2,'0'); mm_val=String(d_cur.getMonth()+1).padStart(2,'0'); foundry_val=d_cur.getFullYear(); dateVal = `${dd_val}/${mm_val}/${foundry_val}`; } 
         }
 
         const { totR, totD } = getCurrentTotals();
@@ -796,38 +796,65 @@
                 if (expensePieChart && expensePieChart.canvas) {
                     try {
                         const imgData = expensePieChart.canvas.toDataURL('image/png', 1.0);
-                        const chartHeight = 65; 
+                        const chartHeight = 60; // Adjusted height
                         const chartWidth = chartHeight * (expensePieChart.canvas.width / expensePieChart.canvas.height); 
-                        const chartX = margin;
+                        const chartX = margin + (contentWidth - chartWidth) / 2; // Center chart
+                        
                         if (checkPageBreak(chartHeight + 7, page1HeaderTitle + " (Detalhe Desp. continuação)")) {
                              pdf.text("Detalhe das Despesas (continuação)", margin, currentY); currentY += 8;
                         }
                         pdf.addImage(imgData, 'PNG', chartX, currentY, chartWidth, chartHeight);
+                        currentY += chartHeight + 5; // Space after chart
+
+                        // Draw Legend below the chart
+                        if (checkPageBreak(20, page1HeaderTitle + " (Legenda continuação)")){} // Check for legend space
                         
-                        const legendX = chartX + chartWidth + 7; 
-                        let legendY = currentY + 3; 
                         pdf.setFontSize(8.5); 
                         pdf.setFont("helvetica", "normal");
                         const pieChartData = expensePieChart.data.datasets[0].data;
                         const pieChartLabels = expensePieChart.data.labels.map(label => stripEmojis(label)); 
                         const pieChartColors = expensePieChart.data.datasets[0].backgroundColor;
+                        
+                        const legendItemHeight = 5;
+                        const legendItemsPerColumn = Math.floor((pageHeight - currentY - margin - 5) / legendItemHeight); // Max items per column
+                        const numColumns = Math.ceil(pieChartData.filter(d => d > 0).length / Math.max(1, legendItemsPerColumn));
+                        const columnWidth = contentWidth / Math.max(1, numColumns);
+                        let legendCurrentX = margin;
+                        let legendStartY = currentY;
+                        let itemsInCurrentColumn = 0;
 
                         for(let i=0; i < pieChartData.length; i++) {
                             if (pieChartData[i] > 0) {
-                                if (legendY > pageHeight - margin - 12) { 
-                                    if (checkPageBreak(12, page1HeaderTitle + " (Legenda continuação)")) {
-                                         pdf.text("Detalhe das Despesas (Legenda - continuação)", margin, currentY); currentY +=8;
+                                if (itemsInCurrentColumn >= legendItemsPerColumn && numColumns > 1) {
+                                    legendCurrentX += columnWidth;
+                                    legendStartY = currentY; // Reset Y for new column
+                                    itemsInCurrentColumn = 0;
+                                    if (legendCurrentX + columnWidth > pageWidth - margin) { // Should not happen if calculated right
+                                       if(checkPageBreak(20, page1HeaderTitle + " (Legenda continuação)")) {
+                                           legendStartY = currentY;
+                                           legendCurrentX = margin;
+                                       }
                                     }
-                                    legendY = currentY; 
                                 }
+                                if (legendStartY > pageHeight - margin - 12) { // Check for Y overflow within a column
+                                     if(checkPageBreak(20, page1HeaderTitle + " (Legenda continuação)")) {
+                                        legendStartY = currentY;
+                                        legendCurrentX = margin; // Reset to first column on new page
+                                        itemsInCurrentColumn = 0;
+                                     }
+                                }
+
                                 pdf.setFillColor(pieChartColors[i]);
-                                pdf.roundedRect(legendX, legendY - 2.5, 3.5, 3.5, 0.5, 0.5, 'F'); 
+                                pdf.roundedRect(legendCurrentX, legendStartY - 2.5, 3.5, 3.5, 0.5, 0.5, 'F'); 
                                 pdf.setTextColor(0,0,0);
-                                pdf.text(`${pieChartLabels[i]}: €${pieChartData[i].toFixed(2)}`, legendX + 6, legendY);
-                                legendY += 5; 
+                                pdf.text(`${pieChartLabels[i]}: €${pieChartData[i].toFixed(2)}`, legendCurrentX + 6, legendStartY, {maxWidth: columnWidth - 10});
+                                legendStartY += legendItemHeight; 
+                                itemsInCurrentColumn++;
                             }
                         }
-                        currentY += Math.max(chartHeight, (legendY - (currentY+3))) + 12; 
+                        // Adjust currentY to be below the tallest legend column
+                        currentY = Math.max(currentY, legendStartY) + 5;
+
 
                     } catch (e) { console.error("Error adding pie chart image:", e); currentY += 10; }
                 }
@@ -1058,6 +1085,11 @@
             type: 'bar', data,
             options: {
                 responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                layout: {
+                    padding: { // Add padding to ensure datalabels are not cut off
+                        right: isExporting ? 40 : 20 // More padding for PDF export
+                    }
+                },
                 scales: { 
                     x: { 
                         beginAtZero: true, 
@@ -1074,11 +1106,40 @@
                     tooltip: { enabled: true, callbacks: { label: c => `€${c.raw.toFixed(2)}` } },
                     datalabels: {
                         display: true,
-                        anchor: 'end',
-                        align: 'end',
+                        anchor: (context) => {
+                            // If bar is very wide (value is high relative to max), anchor inside
+                            const chart = context.chart;
+                            const dataset = chart.data.datasets[context.datasetIndex];
+                            const value = dataset.data[context.dataIndex];
+                            const maxValue = Math.max(...dataset.data.filter(v => typeof v === 'number')); // Max value in the dataset
+                            // This is a heuristic, might need adjustment
+                            return (isExporting && value > maxValue * 0.85) ? 'start' : 'end'; 
+                        },
+                        align: (context) => {
+                             const chart = context.chart;
+                            const dataset = chart.data.datasets[context.datasetIndex];
+                            const value = dataset.data[context.dataIndex];
+                            const maxValue = Math.max(...dataset.data.filter(v => typeof v === 'number'));
+                            return (isExporting && value > maxValue * 0.85) ? 'end' : 'end';
+                        },
+                        offset: (context) => { // Add a small offset if anchored at start to prevent overlap with bar start
+                             const chart = context.chart;
+                            const dataset = chart.data.datasets[context.datasetIndex];
+                            const value = dataset.data[context.dataIndex];
+                            const maxValue = Math.max(...dataset.data.filter(v => typeof v === 'number'));
+                            return (isExporting && value > maxValue * 0.85) ? 8 : 4;
+                        },
                         formatter: (value) => `€${value.toFixed(2)}`,
-                        color: isExporting ? '#333' : (document.body.classList.contains('dark-mode') ? '#eee' : '#333'),
-                        font: { weight: 'bold', size: isExporting ? 10 : 12 }
+                        color: (context) => {
+                            if (!isExporting) return document.body.classList.contains('dark-mode') ? '#eee' : '#333';
+                            // For PDF export, if label is inside bar, make it contrast
+                            const chart = context.chart;
+                            const dataset = chart.data.datasets[context.datasetIndex];
+                            const value = dataset.data[context.dataIndex];
+                            const maxValue = Math.max(...dataset.data.filter(v => typeof v === 'number'));
+                            return (value > maxValue * 0.85) ? '#fff' : '#333';
+                        },
+                        font: { weight: 'bold', size: isExporting ? 9 : 12 } // Slightly smaller for PDF
                     }
                 },
                 animation: { duration: isExporting ? 0 : 500 }
